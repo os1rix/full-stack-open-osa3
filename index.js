@@ -53,7 +53,7 @@ app.get("/info", (req, res) => {
 });
 
 app.delete("/api/persons/:id", (req, res) => {
-  const id = Number(req.params.id);
+  const id = String(req.params.id);
   persons = persons.filter((person) => person.id !== id);
 });
 
