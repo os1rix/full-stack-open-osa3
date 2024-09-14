@@ -53,8 +53,9 @@ app.get("/info", (req, res) => {
 });
 
 app.delete("/api/persons/:id", (req, res) => {
-  const id = String(req.params.id);
+  const id = Number(req.params.id);
   persons = persons.filter((person) => person.id !== id);
+  res.status(204).end();
 });
 
 app.post("/api/persons", (req, res) => {
@@ -73,6 +74,22 @@ app.post("/api/persons", (req, res) => {
   persons = persons.concat(newPerson);
 
   res.json(newPerson);
+});
+
+app.put("/api/persons/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const updatedPerson = persons.find((person) => person.id == id);
+
+  if (updatedPerson) {
+    const updatedPersonWithId = { ...updatedPerson, ...req.body };
+    console.log(updatedPersonWithId);
+    persons = persons.map((person) =>
+      person.id === id ? updatedPersonWithId : person
+    );
+    res.json(updatedPersonWithId);
+  } else {
+    res.status(404).end();
+  }
 });
 
 const PORT = process.env.PORT || 3001;
