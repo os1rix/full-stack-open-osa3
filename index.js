@@ -1,49 +1,63 @@
+require("dotenv").config();
 const express = require("express");
 const app = express();
 const morgan = require("morgan");
 const cors = require("cors");
+const Person = require("./models/person.js");
 
 app.use(express.static("dist"));
+
+const requestLogger = (req, res, next) => {
+  console.log("Method:", req.method);
+  console.log("Path:  ", req.path);
+  console.log("Body:  ", req.body);
+  console.log("---");
+  next();
+};
+
+const errorHandler = (error, req, res, next) => {
+  console.error(error.message);
+
+  if (error.name === "CastError") {
+    return res.status(400).send({ error: "malformatted id" });
+  }
+
+  next(error);
+};
+
 app.use(cors());
 app.use(express.json());
 morgan.token("body", function (req, res) {
   JSON.stringify(req.body);
 });
+app.use(requestLogger);
 
 app.use(
   morgan(":method :url :status :res[content-length] - :response-time ms :body")
 );
 
-let persons = [
-  {
-    name: "Arto Hellas",
-    number: "040-123456",
-    id: 1,
-  },
-  {
-    name: "Ada Lovelace",
-    number: "39-44-5323523",
-    id: 2,
-  },
-  {
-    name: "Dan Abramov",
-    number: "12-43-234345",
-    id: 3,
-  },
-];
+const unknownEndpoint = (req, res) => {
+  res.status(404).send({ error: "unknown endpoint" });
+};
 
 app.get("/api/persons", (req, res) => {
-  res.json(persons);
+  Person.find({}).then((person) => {
+    res.json(person);
+  });
 });
 
-app.get("/api/persons/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const filteredPerson = persons.find((person) => person.id === id);
-  if (filteredPerson) {
-    res.json(filteredPerson);
-  } else {
-    res.status(404).end();
-  }
+app.get("/api/persons/:id", (req, res, next) => {
+  Person.findById(req.params.id)
+    .then((person) => {
+      if (person) {
+        res.json(person);
+      } else {
+        res.status(404).end();
+      }
+    })
+    .catch((error) => {
+      next(error);
+    });
 });
 
 app.get("/info", (req, res) => {
@@ -52,45 +66,47 @@ app.get("/info", (req, res) => {
   );
 });
 
-app.delete("/api/persons/:id", (req, res) => {
-  const id = Number(req.params.id);
-  persons = persons.filter((person) => person.id !== id);
-  res.status(204).end();
+app.delete("/api/persons/:id", (req, res, next) => {
+  Person.findByIdAndDelete(req.params.id)
+    .then((result) => {
+      res.status(204).end();
+    })
+    .catch((error) => next(error));
 });
 
 app.post("/api/persons", (req, res) => {
   if (!(req.body.name && req.body.number)) {
     return res.status(400).json({ error: "content missing" });
-  } else if (persons.some((person) => person.name === req.body.name)) {
-    return res.status(400).json({ error: "name must be unique" });
   }
+  // } else if (persons.some((person) => person.name === req.body.name)) {
+  //   return res.status(400).json({ error: "name must be unique" });
+  // }
 
-  const newPerson = {
+  const person = new Person({
     name: req.body.name,
     number: req.body.number,
-    id: Math.floor(Math.random() * 10000),
+  });
+
+  person.save().then((savedPerson) => {
+    res.json(savedPerson);
+  });
+});
+
+app.put("/api/persons/:id", (req, res, next) => {
+  const person = {
+    name: req.body.name,
+    number: req.body.number,
   };
 
-  persons = persons.concat(newPerson);
-
-  res.json(newPerson);
+  Person.findByIdAndUpdate(req.params.id, person)
+    .then((updatedPerson) => {
+      res.json(updatedPerson);
+    })
+    .catch((error) => next(error));
 });
 
-app.put("/api/persons/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const updatedPerson = persons.find((person) => person.id == id);
+app.use(errorHandler);
+app.use(unknownEndpoint);
 
-  if (updatedPerson) {
-    const updatedPersonWithId = { ...updatedPerson, ...req.body };
-    console.log(updatedPersonWithId);
-    persons = persons.map((person) =>
-      person.id === id ? updatedPersonWithId : person
-    );
-    res.json(updatedPersonWithId);
-  } else {
-    res.status(404).end();
-  }
-});
-
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT;
 app.listen(PORT, () => console.log("Server is running!"));
